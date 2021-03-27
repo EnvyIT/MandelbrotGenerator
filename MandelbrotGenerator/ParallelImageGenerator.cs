@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MandelbrotGenerator;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -11,53 +12,77 @@ namespace MandelbrotGenerator
         private static readonly object _lock = new object();
         public CancellationTokenSource cancellationTokenSource;
         public event EventHandler<EventArgs<Tuple<Area, Bitmap, TimeSpan>>> ImageGenerated;
-        private List<Thread> _threads;
         private static volatile Bitmap _bitmap;
+
 
         public void GenerateImage(Area area)
         {
-            var processorCount = Environment.ProcessorCount;
             _bitmap = new Bitmap(area.Width, area.Height);
-            _threads = new List<Thread>(processorCount);
+            var processorCount = Environment.ProcessorCount;
+            ThreadPool.SetMaxThreads(processorCount, processorCount);
+            List<Area> areas = SplitAreas(area);
 
-            var partWidth = area.Width / processorCount;
-            var partReal = Math.Abs(area.MinReal - area.MaxReal) / processorCount;
-            var lastDiff = Math.Abs(area.Width - partWidth * processorCount);
-            var fromWidth = 0;
-            var toWidth = partWidth;
-            var fromReal = area.MinReal;
-            var toReal = fromReal + partReal;
-
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-            for (var i = 0; i < processorCount; ++i)
+            using (var countdownEvent = new CountdownEvent(areas.Count))
             {
-                if (processorCount - 1 == i)
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                areas.ForEach(a =>
                 {
-                    toWidth += lastDiff;
-                }
-                _threads.Add(new Thread(new ParameterizedThreadStart(Run)));
-                var newArea = new Area(area, fromWidth, toWidth, fromReal, toReal);
-                _threads[i].Start(newArea);
-                toWidth += partWidth;
-                fromWidth += partWidth;
-                toReal += partReal;
-                fromReal += partReal;
+                    ThreadPool.QueueUserWorkItem(param =>
+                    {
+                        Run(a);
+                        countdownEvent.Signal();
+                    });
+                });
+
+                countdownEvent.Wait();
+                stopwatch.Stop();
+                OnImageGenerated(area, _bitmap, stopwatch.Elapsed);
             }
-            _threads.ForEach(thread => thread.Join());
-            stopwatch.Stop();
-            OnImageGenerated(area, _bitmap, stopwatch.Elapsed);
+        
         }
 
-        private void Run(object parameter)
+        private List<Area> SplitAreas(Area area, int capacity = 1024)
         {
-            if (cancellationTokenSource != null)
+            var areas = new List<Area>(capacity);
+            var scale = (int) Math.Sqrt(capacity);
+            var widthStep = area.Width / scale;
+            var heightStep = area.Height /  scale;
+            var widthDiff = Math.Abs(area.Width - widthStep * scale);
+            var heightDiff = Math.Abs(area.Height - heightStep * scale);
+            var fromWidth = 0;
+            var toWidth = widthStep;
+            var fromHeight = 0;
+            var toHeight = heightStep;
+
+            for (var row = 0; row < scale; ++row)
             {
-                cancellationTokenSource.Cancel(false);
+                if (scale - 1 == row)
+                {
+                    toWidth += widthDiff;
+                }
+                for (int col = 0; col < scale; ++col)
+                {
+                    if (scale - 1 == col)
+                    {
+                        toHeight += heightDiff;
+                    }
+                    areas.Add(new Area(area,fromWidth,toWidth,fromHeight, toHeight));
+                    fromHeight = toHeight;
+                    toHeight += heightStep;
+                }
+                fromWidth = toWidth;
+                toWidth += widthStep;
+                fromHeight = 0;
+                toHeight = heightStep;
             }
-            cancellationTokenSource = new CancellationTokenSource();
-            var area = parameter as Area;
-            GenerateMandelbrotSet(area, cancellationTokenSource.Token);
+            return areas;
+        }
+
+        private void Run(object state)
+        { 
+            GenerateMandelbrotSet(state as Area);  
         }
 
         private void OnImageGenerated(Area area, Bitmap bitmap, TimeSpan elapsed)
@@ -70,7 +95,7 @@ namespace MandelbrotGenerator
             }
         }
 
-        private void GenerateMandelbrotSet(Area area, CancellationToken cancellationToken)
+        private void GenerateMandelbrotSet(Area area)
         {
             int maxIterations = Settings.DefaultSettings.MaxIterations;
             double zBorder = Settings.DefaultSettings.ZBorder * Settings.DefaultSettings.ZBorder;
@@ -78,7 +103,7 @@ namespace MandelbrotGenerator
 
             for (int i = area.FromWidth; i < area.ToWidth; ++i)
             {
-                for (int j = 0; j < area.Height; ++j)
+                for (int j = area.FromHeight; j < area.ToHeight; ++j)
                 {
                     cReal = area.MinReal + i * area.PixelWidth;
                     cImg = area.MinImg + j * area.PixelHeight;
