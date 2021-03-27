@@ -1,5 +1,4 @@
-﻿using MandelbrotGenerator;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -13,14 +12,16 @@ namespace MandelbrotGenerator
         public CancellationTokenSource cancellationTokenSource;
         public event EventHandler<EventArgs<Tuple<Area, Bitmap, TimeSpan>>> ImageGenerated;
         private static volatile Bitmap _bitmap;
+        private static readonly ushort Scale = 40;
 
 
         public void GenerateImage(Area area)
         {
+            List<Area> areas = SplitAreas(area);
             _bitmap = new Bitmap(area.Width, area.Height);
             var processorCount = Environment.ProcessorCount;
             ThreadPool.SetMaxThreads(processorCount, processorCount);
-            List<Area> areas = SplitAreas(area);
+           
 
             using (var countdownEvent = new CountdownEvent(areas.Count))
             {
@@ -40,35 +41,34 @@ namespace MandelbrotGenerator
                 stopwatch.Stop();
                 OnImageGenerated(area, _bitmap, stopwatch.Elapsed);
             }
-        
+
         }
 
-        private List<Area> SplitAreas(Area area, int capacity = 1024)
+        private List<Area> SplitAreas(Area area)
         {
-            var areas = new List<Area>(capacity);
-            var scale = (int) Math.Sqrt(capacity);
-            var widthStep = area.Width / scale;
-            var heightStep = area.Height /  scale;
-            var widthDiff = Math.Abs(area.Width - widthStep * scale);
-            var heightDiff = Math.Abs(area.Height - heightStep * scale);
+            var areas = new List<Area>(Scale * Scale);
+            var widthStep = area.Width / Scale;
+            var heightStep = area.Height / Scale;
+            var widthDiff = Math.Abs(area.Width - widthStep * Scale);
+            var heightDiff = Math.Abs(area.Height - heightStep * Scale);
             var fromWidth = 0;
             var toWidth = widthStep;
             var fromHeight = 0;
             var toHeight = heightStep;
 
-            for (var row = 0; row < scale; ++row)
+            for (var row = 0; row < Scale; ++row)
             {
-                if (scale - 1 == row)
+                if (Scale - 1 == row)
                 {
                     toWidth += widthDiff;
                 }
-                for (int col = 0; col < scale; ++col)
+                for (int col = 0; col < Scale; ++col)
                 {
-                    if (scale - 1 == col)
+                    if (Scale - 1 == col)
                     {
                         toHeight += heightDiff;
                     }
-                    areas.Add(new Area(area,fromWidth,toWidth,fromHeight, toHeight));
+                    areas.Add(new Area(area, fromWidth, toWidth, fromHeight, toHeight));
                     fromHeight = toHeight;
                     toHeight += heightStep;
                 }
@@ -81,18 +81,14 @@ namespace MandelbrotGenerator
         }
 
         private void Run(object state)
-        { 
-            GenerateMandelbrotSet(state as Area);  
+        {
+            GenerateMandelbrotSet(state as Area);
         }
 
         private void OnImageGenerated(Area area, Bitmap bitmap, TimeSpan elapsed)
         {
             var tuple = new Tuple<Area, Bitmap, TimeSpan>(area, bitmap, elapsed);
-            var handler = ImageGenerated;
-            if (handler != null)
-            {
-                handler.Invoke(this, new EventArgs<Tuple<Area, Bitmap, TimeSpan>>(tuple));
-            }
+            ImageGenerated?.Invoke(this, new EventArgs<Tuple<Area, Bitmap, TimeSpan>>(tuple));
         }
 
         private void GenerateMandelbrotSet(Area area)
@@ -110,7 +106,7 @@ namespace MandelbrotGenerator
 
                     zReal = 0;
                     zImg = 0;
-                    int k = 0;
+                    var k = 0;
                     while ((zReal * zReal + zImg * zImg < zBorder) && k < maxIterations)
                     {
                         zNewReal = zReal * zReal - zImg * zImg + cReal;
