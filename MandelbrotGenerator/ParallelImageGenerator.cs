@@ -12,7 +12,7 @@ namespace MandelbrotGenerator
         public CancellationTokenSource cancellationTokenSource;
         public event EventHandler<EventArgs<Tuple<Area, Bitmap, TimeSpan>>> ImageGenerated;
         private static volatile Bitmap _bitmap;
-        private const ushort Scale = 120;
+        private const byte Scale = 120;
         private static readonly List<Area> _areas = new List<Area>(Scale * Scale);
 
         public void GenerateImage(Area area)
