@@ -43,7 +43,7 @@ namespace MandelbrotGenerator
             {
                 currentArea = e.Value.Item1;
                 pictureBox.Image = e.Value.Item2;
-                toolStripStatusLabel.Text = "Done (Runtime: " + e.Value.Item3.TotalSeconds + " seconds)";
+                toolStripStatusLabel.Text = "Done (Runtime: " + e.Value.Item3.TotalMilliseconds + " ms)";
             } 
         }
 
