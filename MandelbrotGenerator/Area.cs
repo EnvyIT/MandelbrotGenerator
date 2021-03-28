@@ -2,6 +2,7 @@
 {
     public class Area
     {
+
         public double MinReal { get; set; }
         public double MinImg { get; set; }
         public double MaxReal { get; set; }
@@ -19,20 +20,11 @@
         public double ToReal { get; }
 
         private int height;
-        private double pixelWidth;
-        private double pixelHeight;
 
         public int Height { get { return height; } set { if (value > 0) height = value; } }
-        public double PixelWidth
-        {
-            get => pixelWidth;
-            set => pixelWidth = value;
-        }
-        public double PixelHeight
-        {
-            get => pixelHeight;
-            set => pixelHeight = value;
-        }
+
+        public double PixelWidth { get { return (MaxReal - MinReal) / Width; } }
+        public double PixelHeight { get { return (MaxImg - MinImg) / Height; } }
 
         public Area() : this(-2, -1, 1, 1, 640, 480)
         {
@@ -46,8 +38,6 @@
             MaxImg = maxImg;
             Width = width;
             Height = height;
-            PixelWidth = (MaxReal - MinReal) / Width;
-            PixelHeight = (MaxImg - MinImg) / Height;
         }
 
         public Area(Area area, int fromWidth, int toWidth, int fromHeight, int toHeight) : this(area.MinReal, area.MinImg, area.MaxReal, area.MaxImg, area.Width, area.Height)
@@ -57,7 +47,6 @@
             FromHeight = fromHeight;
             ToHeight = toHeight;
         }
-
 
     }
 }
